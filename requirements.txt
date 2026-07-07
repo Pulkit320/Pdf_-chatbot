@@ -1,0 +1,5 @@
+google-generativeai
+psycopg2-binary
+python-dotenv
+pypdf
+pdfplumber

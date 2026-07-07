@@ -1,0 +1,11 @@
+  # Environments
+  venv/
+  .env
+
+  # Python caching
+  __pycache__/
+  *.pyc
+
+  # Local databases / temp files
+  *.db
+  .DS_Store
