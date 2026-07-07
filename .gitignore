@@ -1,11 +1,11 @@
-  # Environments
-  venv/
-  .env
+# Environments
+venv/
+.env
 
-  # Python caching
-  __pycache__/
-  *.pyc
+# Python caching
+__pycache__/
+*.pyc
 
-  # Local databases / temp files
-  *.db
-  .DS_Store
+# Local databases / temp files
+*.db
+.DS_Store
