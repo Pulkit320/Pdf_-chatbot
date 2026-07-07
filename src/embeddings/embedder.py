@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # allowing os.getenv() to access them as if they were set globally.
 load_dotenv()
 
-def get_embedding(text: str) -> list[float]:
+def get_embedding(text: str, task_type: str = "retrieval_document") -> list[float]:
     """
     Generates a mathematical representation (embedding vector) of the input text
     using Google AI Studio's Gemini Embedding API.
@@ -31,10 +31,12 @@ def get_embedding(text: str) -> list[float]:
        Project or let the system set up a new one).
     5. Copy your new API key.
     6. Paste it into your project's `.env` file under the name `GOOGLE_API_KEY` (e.g. GOOGLE_API_KEY="AIzaSy...").
-       Be sure to keep this file out of version control (it is added to `.gitignore`).
+     Be sure to keep this file out of version control (it is added to `.gitignore`).
 
     Args:
         text (str): The raw text segment to be embedded.
+        task_type (str): The task type for embedding (e.g., 'retrieval_document' or 'retrieval_query').
+                         Defaults to 'retrieval_document'.
 
     Returns:
         list[float]: A list of float values representing the embedding vector.
@@ -66,19 +68,26 @@ def get_embedding(text: str) -> list[float]:
         return []
 
     try:
-        # Why use text-embedding-004:
-        # text-embedding-004 is the state-of-the-art text embedding model from Google,
-        # designed specifically for retrieval tasks.
+        # Why use gemini-embedding-2:
+        # gemini-embedding-2 is the state-of-the-art text embedding model from Google,
+        # yielding superior retrieval performance.
         #
-        # Why task_type="retrieval_document":
+        # Why output_dimensionality=768:
+        # By default, gemini-embedding-2 returns a 3072-dimensional vector. Since our pgvector
+        # database table uses an 'embedding vector(768)' datatype constraint, we explicitly 
+        # request 768 dimensions. The API scales down the vector dimensions while retaining 
+        # maximum semantic context.
+        #
+        # Why task_type:
         # The 'retrieval_document' task type tells the model that this text is part of a 
         # larger document index (which we will search later). If we were embedding a search 
         # query, we would use 'retrieval_query'. Specifying the correct task type yields 
         # significantly higher accuracy for semantic search.
         response = genai.embed_content(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-2",
             content=clean_text,
-            task_type="retrieval_document"
+            task_type=task_type,
+            output_dimensionality=768
         )
         
         # Why check dictionary keys:

@@ -64,9 +64,10 @@ class TestEmbedder(unittest.TestCase):
         
         # Verify it was called with correct model and content
         mock_embed_content.assert_called_once_with(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-2",
             content="Hello Gemini",
-            task_type="retrieval_document"
+            task_type="retrieval_document",
+            output_dimensionality=768
         )
 
     @patch("google.generativeai.embed_content")
