@@ -15,7 +15,7 @@ To parse text from PDFs, Python offers several libraries. For this project, we c
 
 ## 2. Code Implementation
 
-The ingestion logic is located in [pdf_reader.py](file:///home/pulkit/projects/pdf_chatbot/src/ingestion/pdf_reader.py). Below is the complete code.
+The ingestion logic is located in [pdf_reader.py](file:///home/pulkit/projects/pdf_chatbot/src/ingestion/pdf_reader.py). Below is the complete code showing the integrated OCR fallback mechanism.
 
 ```python
 """
@@ -25,6 +25,30 @@ It serves as Phase 1 of our PDF Chatbot pipeline.
 
 import os
 import pdfplumber
+
+from pdf2image import convert_from_path
+import pytesseract
+
+def ocr_fallback(pdf_path: str, page_number: int) -> str:
+    """
+    Converts a single PDF page to an image and runs Tesseract OCR on it.
+    
+    Why we use this helper:
+    If a PDF page has no digital text layer (e.g. it is a scanned image or photo), 
+    we need to convert the page representation into a graphic image first, then 
+    pass it to an OCR tool to detect individual characters and words.
+    """
+    try:
+        # Convert only the specific scanned page to an image.
+        # pdf2image page numbering is 1-based for first_page and last_page parameters.
+        pages = convert_from_path(pdf_path, first_page=page_number, last_page=page_number)
+        if pages:
+            # Run OCR on the retrieved page image
+            ocr_text = pytesseract.image_to_string(pages[0])
+            return ocr_text.strip()
+    except Exception as e:
+        print(f"OCR failed for page {page_number}: {e}")
+    return ""
 
 def extract_text(pdf_path: str) -> list[dict]:
     """
@@ -93,6 +117,15 @@ def extract_text(pdf_path: str) -> list[dict]:
                 # A page is empty or scanned if no text was successfully extracted.
                 is_empty_or_scanned = len(clean_text) == 0
 
+                # Why run OCR Fallback:
+                # If the digital layer yielded no characters, the page might be scanned.
+                # We attempt to run OCR fallback to recover text.
+                if is_empty_or_scanned:
+                    ocr_text = ocr_fallback(pdf_path, page_num)
+                    if ocr_text:
+                        clean_text = ocr_text
+                        is_empty_or_scanned = False  # Text has been recovered successfully!
+
                 extracted_pages.append({
                     "page_number": page_num,
                     "text": clean_text,
@@ -147,39 +180,44 @@ is_empty_or_scanned = len(clean_text) == 0
 * **What it does:** Safely strips leading and trailing whitespaces from the extracted text. If `extract_text` returned `None` (which happens if a page has no text content), we default to an empty string. We then evaluate if `clean_text` has a length of zero and store that result in `is_empty_or_scanned`.
 * **Why it matters:** PDF pages that contain images (scanned document pages) do not have a digital text layer, meaning `extract_text()` returns `None`. By flagging these pages with a boolean `is_empty_or_scanned` instead of throwing an exception or crashing, we handle empty or image-only pages gracefully.
 
+### E. OCR Fallback Trigger
+```python
+if is_empty_or_scanned:
+    ocr_text = ocr_fallback(pdf_path, page_num)
+    if ocr_text:
+        clean_text = ocr_text
+        is_empty_or_scanned = False
+```
+* **What it does:** If the digital layer returns no text (`is_empty_or_scanned = True`), the engine falls back to calling our `ocr_fallback` helper function. If OCR successfully recovers characters on the page, the text is saved, and we reset the `is_empty_or_scanned` flag to `False` (indicating text has been successfully found).
+
 ---
 
-## 4. Optional Extension: Handling Scanned PDFs with OCR
+## 4. Handling Scanned PDFs with OCR
 
 What happens if a user uploads a PDF that is a scan of a printed page? 
-In this case, the PDF is essentially a collection of images. Our current implementation will successfully read it without crashing, but it will flag every page with `is_empty_or_scanned = True` and return empty strings for the text.
-
-To extract text from these pages, we must perform **Optical Character Recognition (OCR)**.
+In this case, the PDF is essentially a collection of images. Our implementation reads it without crashing, notices that the digital extraction yielded empty strings, and activates the **Optical Character Recognition (OCR)** fallback.
 
 ### How OCR Works
 OCR algorithms analyze the shapes of dark and light areas on an image to recognize letters and synthesize them into computer-readable text. The industry standard open-source OCR engine is **Tesseract** (maintained by Google).
 
-### Integrating OCR (Optional Extension)
-If you want to extend this system to support scanned PDFs, you would follow these steps:
+### Setting Up System Dependencies
+To enable the OCR system on your local machine, you must install the Tesseract binary and its corresponding libraries:
 
-1. **Install System Dependencies:**
-   Install the Tesseract OCR engine on your computer:
+1. **Install System OCR (Tesseract):**
    * **macOS:** `brew install tesseract`
    * **Linux:** `sudo apt install tesseract-ocr`
    * **Windows:** Download the binary installer.
 
-2. **Install Python Libraries:**
+2. **Install Python Wrappers:**
+   Run the following command in your virtual environment:
    ```bash
    pip install pytesseract pdf2image
    ```
 
-3. **Fallback Implementation:**
-   You can add an OCR fallback inside your loop when `is_empty_or_scanned` is detected:
+### OCR Fallback Function
+The `ocr_fallback` function is called directly within the loop when digital parsing fails:
 
 ```python
-from pdf2image import convert_from_path
-import pytesseract
-
 def ocr_fallback(pdf_path: str, page_number: int) -> str:
     # Convert only the specific scanned page to an image
     # Note: page_number is 1-based, convert_from_path takes first_page/last_page
@@ -191,7 +229,7 @@ def ocr_fallback(pdf_path: str, page_number: int) -> str:
     return ""
 ```
 
-By adding this check, you can ensure that even scanned documents can be converted to searchable text before moving to the embedding stage.
+By integrating this check, we ensure that even scanned documents can be converted to searchable text before moving to the embedding stage.
 
 ---
 
@@ -201,4 +239,4 @@ By reading and building this ingestion phase, you are now able to:
 1. **Implement** digital PDF text extraction page-by-page using the `pdfplumber` library.
 2. **Defend** the importance of maintaining page numbers throughout the ingestion pipeline for citation provenance.
 3. **Debug** and handle empty or scanned PDF pages using clean fallback checks.
-4. **Architect** an OCR (Optical Character Recognition) fallback system using Tesseract to process image-only scanned PDFs.
+4. **Architect** and integrate an OCR (Optical Character Recognition) fallback system using Tesseract and `pdf2image` to process image-only scanned PDFs.

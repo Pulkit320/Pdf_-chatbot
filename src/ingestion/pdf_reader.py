@@ -6,6 +6,19 @@ It serves as Phase 1 of our PDF Chatbot pipeline.
 import os
 import pdfplumber
 
+from pdf2image import convert_from_path
+import pytesseract
+
+def ocr_fallback(pdf_path: str, page_number: int) -> str:
+    # Convert only the specific scanned page to an image
+    # Note: page_number is 1-based, convert_from_path takes first_page/last_page
+    pages = convert_from_path(pdf_path, first_page=page_number, last_page=page_number)
+    if pages:
+        # Run OCR on the page image
+        ocr_text = pytesseract.image_to_string(pages[0])
+        return ocr_text.strip()
+    return ""
+
 def extract_text(pdf_path: str) -> list[dict]:
     """
     Extracts text from a PDF file page-by-page.
@@ -72,7 +85,11 @@ def extract_text(pdf_path: str) -> list[dict]:
                 # Digital PDFs have text layers, whereas scanned PDFs or empty pages return empty strings or None.
                 # A page is empty or scanned if no text was successfully extracted.
                 is_empty_or_scanned = len(clean_text) == 0
-
+                if is_empty_or_scanned:
+                    ocr_text = ocr_fallback(pdf_path, page_num)
+                    if ocr_text:
+                        clean_text = ocr_text
+                        is_empty_or_scanned = False
                 extracted_pages.append({
                     "page_number": page_num,
                     "text": clean_text,
